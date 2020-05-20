@@ -33,6 +33,8 @@ int VitesseRapide = 100;
 int TempsPose = 30; //(s)
 
 // Interrupt for motor step
+// https://techtutorialsx.com/2017/10/07/esp32-arduino-timer-interrupts/
+// https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/peripherals/timer.html
 volatile int interruptCounter;
 int totalInterruptCounter;
 hw_timer_t * timer = NULL;
@@ -77,7 +79,7 @@ void setup() {
   pinMode(EN, OUTPUT);
   resetEDPins(); //Set step, direction, microstep and enable pins to default states
   Serial.begin(115200); //Open Serial connection for debugging
-  SerialBT.begin("ESP32test"); //Bluetooth device name
+  SerialBT.begin("ESP32"); //Bluetooth device name
   Serial.println("The device started, now you can pair it with bluetooth!");
   Serial.println("Open remote control app on your camera!");
   delay(10000);
@@ -96,7 +98,13 @@ void setup() {
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
  //Main loop menu
 void loop() {
-  while(SerialBT.available()){
+  
+  resetEDPins();
+}
+
+void menu()
+{
+	while(SerialBT.available()){
     user_input = SerialBT.readString(); //Read user input and trigger appropriate function
     switch (current_menu) {
       case 1: 
@@ -109,7 +117,7 @@ void loop() {
             Recule(Vitesse);
             break;
           case 3:
-            Stop();
+            StopMotor();
             break;
           case 4:
             Avance(VitesseRapide);
@@ -166,8 +174,6 @@ void loop() {
         break;  
     }
   }
-  
-  resetEDPins();
 }
 
 void menu_start()
@@ -298,7 +304,12 @@ void httpPost(char* jString) {
 
 void DeclenchementPhoto()
 {
-  httpPost(JSON_5);  //actTakePicture
+  httpPost(JSON_3);  //actTakePicture
+}
+
+void StopDeclenchementPhoto()
+{
+  httpPost(JSON_4);  //Stop bulb
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -321,7 +332,7 @@ void ControleMoteur(int Intervalle,int Direction);
   timerAlarmEnable(timer); //Activation timer
 }
 
-void Stop ()
+void StopMotor()
 {
   timerAlarmDisable(timer);
 }
@@ -329,7 +340,7 @@ void Stop ()
 void IRAM_ATTR onTimer() {
   portENTER_CRITICAL_ISR(&timerMux);
   interruptCounter++;
-	 GPIO.out_w1ts = ((uint32_t)1 << stp); //Trigger a step. DigitalWrite equivalent (faster) see : https://www.reddit.com/r/esp32/comments/f529hf/results_comparing_the_speeds_of_different_gpio/
+  GPIO.out_w1ts = ((uint32_t)1 << stp); //Trigger a step. DigitalWrite equivalent (faster) see : https://www.reddit.com/r/esp32/comments/f529hf/results_comparing_the_speeds_of_different_gpio/
   portEXIT_CRITICAL_ISR(&timerMux);
 }
 
@@ -362,40 +373,6 @@ void ResolutionMoteur(int Resolution)
     SerialBT.println("Resolution 1");
     }
 }
-
-//Default angle mode function
-void AngleForward(int Pas2)
-{
-  SerialBT.println("Moving Angle forward");
-  digitalWrite(dir, LOW); //Pull direction pin low to move "forward"
-  TournerAngle(Pas2);
-}
-
-//Default angle mode function
-void AngleBackward(int Pas2)
-{
-  SerialBT.println("Moving Angle forward");
-  digitalWrite(dir, HIGH); //Pull direction pin low to move "backward"
-  TournerAngle(Pas2);
-  SerialBT.println("Enter new option");
-  SerialBT.println();
-}
-
-//Default angle mode function
-void TournerAngle(int Pas)
-{
-  ResolutionMoteur(MicroStepping);
-  int x;
-  
-  for(x= 0; x<Pas; x++)  //Loop the forward stepping enough times for motion to be visible
-  {
-    digitalWrite(stp,HIGH); //Trigger one step forward
-    delay(1);
-    digitalWrite(stp,LOW); //Pull step pin low so it can be triggered again
-    delay(1);
-  }
-}
-
 
 
 //Reset Easy Driver pins to default states
