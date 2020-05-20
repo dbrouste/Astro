@@ -98,8 +98,17 @@ void setup() {
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
  //Main loop menu
 void loop() {
-  
+  menu();
   resetEDPins();
+  
+  if (interruptCounterPhoto > 0) {
+ 
+    portENTER_CRITICAL(&timerMux);
+    interruptCounter--;
+    portEXIT_CRITICAL(&timerMux);
+ 
+    StopDeclenchementPhoto();
+  }
 }
 
 void menu()
@@ -207,18 +216,19 @@ void Configuration()
   current_menu = 2;
 }
 
-int CalculIntervalle(void)
+int CalculIntervalleMoteur(void)
 {
   int Intervalle = StepperMinDegree*DayInSec*vitesse*1000*1000/(MicroStepping*MotorGearRatio*WormGearRatio*360); //intervalle en us
   return Intervalle;
 }
+
 
 void Avance(int vitesse)
 {
   SerialBT.println("On avance");
   digitalWrite(EN, LOW); //Pull enable pin low to allow motor control
   int Direction = 1; //Avance
-  int Intervalle = CalculIntervalle();
+  int Intervalle = CalculIntervalleMoteur();
   ControleMoteur(Intervalle;Direction);
 }
 
@@ -227,7 +237,7 @@ void Recule(int distance)
   SerialBT.println("On recule");
   digitalWrite(EN, LOW); //Pull enable pin low to allow motor control
   int Direction = 0; //Reule
-  int Intervalle = CalculIntervalle();
+  int Intervalle = CalculIntervalleMoteur();
   ControleMoteur(Intervalle,Direction);
 }
 
@@ -304,6 +314,10 @@ void httpPost(char* jString) {
 
 void DeclenchementPhoto()
 {
+  timerPhoto = timerBegin(2, 80000, true); //Definition adresse timer
+  timerAttachInterrupt(timerPhoto, &onTimerPhoto, true); //Def de l'action à executer
+  timerAlarmWrite(timerPhoto, TempsPose*10000, true); //Def de la valeur du compteur
+  timerAlarmEnable(timerPhoto); //Activation timer
   httpPost(JSON_3);  //actTakePicture
 }
 
@@ -335,6 +349,8 @@ void ControleMoteur(int Intervalle,int Direction);
 void StopMotor()
 {
   timerAlarmDisable(timer);
+  timerAlarmDisable(timerPhoto);
+  StopDeclenchementPhoto();
 }
 
 void IRAM_ATTR onTimer() {
@@ -342,6 +358,12 @@ void IRAM_ATTR onTimer() {
   interruptCounter++;
   GPIO.out_w1ts = ((uint32_t)1 << stp); //Trigger a step. DigitalWrite equivalent (faster) see : https://www.reddit.com/r/esp32/comments/f529hf/results_comparing_the_speeds_of_different_gpio/
   portEXIT_CRITICAL_ISR(&timerMux);
+}
+
+void IRAM_ATTR onTimerPhoto() {
+  portENTER_CRITICAL_ISR(&timerMuxPhoto);
+  interruptCounterPhoto++;
+  portEXIT_CRITICAL_ISR(&timerMuxPhoto);
 }
 
 //Resolution moteur
