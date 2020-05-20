@@ -71,9 +71,22 @@ WiFiClient client;
 
 unsigned long lastmillis;
 
+void IRAM_ATTR onTimer() {
+  portENTER_CRITICAL_ISR(&timerMux);
+  interruptCounter++;
+  GPIO.out_w1ts = ((uint32_t)1 << stp); //Trigger a step. DigitalWrite equivalent (faster) see : https://www.reddit.com/r/esp32/comments/f529hf/results_comparing_the_speeds_of_different_gpio/
+  portEXIT_CRITICAL_ISR(&timerMux);
+}
+
+void IRAM_ATTR onTimerPhoto() {
+  portENTER_CRITICAL_ISR(&timerMuxPhoto);
+  interruptCounterPhoto++;
+  portEXIT_CRITICAL_ISR(&timerMuxPhoto);
+}
+
 void setup() {
   pinMode(stp, OUTPUT);
-  pinMode(dir, OUTPUT);
+  pinMode(PinDirection, OUTPUT);
   pinMode(MS1, OUTPUT);
   pinMode(MS2, OUTPUT);
   pinMode(EN, OUTPUT);
@@ -113,7 +126,7 @@ void loop() {
 
 void menu()
 {
-	while(SerialBT.available()){
+  while(SerialBT.available()){
     user_input = SerialBT.readString(); //Read user input and trigger appropriate function
     switch (current_menu) {
       case 1: 
@@ -135,7 +148,7 @@ void menu()
             Recule(VitesseRapide);
             break;
           case 6:
-            DeclenchementPhoto()
+            DeclenchementPhoto();
             break;
           case 7:
             Configuration();
@@ -222,7 +235,7 @@ void Configuration()
 
 int CalculIntervalleMoteur(void)
 {
-  int Intervalle = StepperMinDegree*DayInSec*vitesse*1000*1000/(MicroStepping*MotorGearRatio*WormGearRatio*360); //intervalle en us
+  int Intervalle = StepperMinDegree*DayInSec*Vitesse*1000*1000/(MicroStepping*MotorGearRatio*WormGearRatio*360); //intervalle en us
   return Intervalle;
 }
 
@@ -233,7 +246,7 @@ void Avance(int vitesse)
   digitalWrite(EN, LOW); //Pull enable pin low to allow motor control
   int Direction = 1; //Avance
   int Intervalle = CalculIntervalleMoteur();
-  ControleMoteur(Intervalle;Direction);
+  ControleMoteur(Intervalle,Direction);
 }
 
 void Recule(int distance)
@@ -341,7 +354,7 @@ void StopDeclenchementPhoto()
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 //Controle moteur
-void ControleMoteur(int Intervalle,int Direction);
+void ControleMoteur(int Intervalle,int Direction)
 {
   digitalWrite(PinDirection, Direction); //Choix direction
   timer = timerBegin(1, 80, true); //Definition adresse timer
@@ -357,18 +370,6 @@ void StopMotor()
   StopDeclenchementPhoto();
 }
 
-void IRAM_ATTR onTimer() {
-  portENTER_CRITICAL_ISR(&timerMux);
-  interruptCounter++;
-  GPIO.out_w1ts = ((uint32_t)1 << stp); //Trigger a step. DigitalWrite equivalent (faster) see : https://www.reddit.com/r/esp32/comments/f529hf/results_comparing_the_speeds_of_different_gpio/
-  portEXIT_CRITICAL_ISR(&timerMux);
-}
-
-void IRAM_ATTR onTimerPhoto() {
-  portENTER_CRITICAL_ISR(&timerMuxPhoto);
-  interruptCounterPhoto++;
-  portEXIT_CRITICAL_ISR(&timerMuxPhoto);
-}
 
 //Resolution moteur
 
