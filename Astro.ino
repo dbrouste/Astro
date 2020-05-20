@@ -135,6 +135,9 @@ void menu()
             Recule(VitesseRapide);
             break;
           case 6:
+            DeclenchementPhoto()
+            break;
+          case 7:
             Configuration();
             break;
           default:
@@ -193,7 +196,8 @@ void menu_start()
   SerialBT.println("3. Stop");
   SerialBT.println("4. Avance rapide");
   SerialBT.println("5. Recule rapide");
-  SerialBT.println("6. Configuration");
+  SerialBT.println("6. Demarrage photo");  
+  SerialBT.println("7. Configuration");
   SerialBT.println();
 }
 
