@@ -11,17 +11,10 @@ BluetoothSerial SerialBT;
 
  //Declare pin functions on RedBoard
 #define stp 32
-#define dir 33
+#define PinDirection 33
 #define MS1 26
 #define MS2 27
 #define EN  25
-
-//****Stepper driver Microstep Resolution************
-// MS1  MS2 Microstep Resolution
-// 0    0   Full Step (2 Phase)
-// 1    0   Half Step
-// 0    1   Quarter Step
-// 1    1   Eigth Step
 
 //Declare variables for functions
 // Stepper function
@@ -29,10 +22,7 @@ String user_input;
 int current_menu;
 
 float StepperMinDegree = 1.8; // pas mimimum du moteur en degree
-int StepperAngleDiv = 4; //1 2 4 ou 8
-int Angle;
-
-
+int MicroStepping = 4; //1 2 4 ou 8
 int Attente = 1000; // Attente avant photo (en ms)
 int MotorGearRatio = 475;
 int WormGearRatio = 10;
@@ -42,6 +32,17 @@ int Vitesse = 1;
 int VitesseRapide = 100;
 int TempsPose = 30; //(s)
 
+// Interrupt for motor step
+volatile int interruptCounter;
+int totalInterruptCounter;
+hw_timer_t * timer = NULL;
+portMUX_TYPE timerMux = portMUX_INITIALIZER_UNLOCKED;
+
+// Interrupt for taking pictures
+volatile int interruptCounterPhoto;
+int totalInterruptCounterPhoto;
+hw_timer_t * timerPhoto = NULL;
+portMUX_TYPE timerMuxPhoto = portMUX_INITIALIZER_UNLOCKED;
 
 
 // Sony function
@@ -200,12 +201,18 @@ void Configuration()
   current_menu = 2;
 }
 
+int CalculIntervalle(void)
+{
+  int Intervalle = StepperMinDegree*DayInSec*vitesse*1000*1000/(MicroStepping*MotorGearRatio*WormGearRatio*360); //intervalle en us
+  return Intervalle;
+}
+
 void Avance(int vitesse)
 {
   SerialBT.println("On avance");
   digitalWrite(EN, LOW); //Pull enable pin low to allow motor control
-  int Intervalle = StepperMinDegree*DayInSec*vitesse*1000/(StepperAngleDiv*MotorGearRatio*WormGearRatio*360); //nb de pas à faire
   int Direction = 1; //Avance
+  int Intervalle = CalculIntervalle();
   ControleMoteur(Intervalle;Direction);
 }
 
@@ -213,15 +220,12 @@ void Recule(int distance)
 {
   SerialBT.println("On recule");
   digitalWrite(EN, LOW); //Pull enable pin low to allow motor control
-  int Intervalle = StepperMinDegree*DayInSec*vitesse*1000/(StepperAngleDiv*MotorGearRatio*WormGearRatio*360); //nb de pas à faire
-  int Direction = 0; //Recule
-  ControleMoteur(Intervalle;Direction);
+  int Direction = 0; //Reule
+  int Intervalle = CalculIntervalle();
+  ControleMoteur(Intervalle,Direction);
 }
 
-void Stop ()
-{
-  
-}
+
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -308,12 +312,35 @@ void DeclenchementPhoto()
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 //Controle moteur
-void ControleMoteur(int Intervalle;int Direction);
+void ControleMoteur(int Intervalle,int Direction);
 {
-  
+  digitalWrite(PinDirection, Direction); //Choix direction
+  timer = timerBegin(1, 80, true); //Definition adresse timer
+  timerAttachInterrupt(timer, &onTimer, true); //Def de l'action à executer
+  timerAlarmWrite(timer, Intervalle, true); //Def de la valeur du compteur
+  timerAlarmEnable(timer); //Activation timer
+}
+
+void Stop ()
+{
+  timerAlarmDisable(timer);
+}
+
+void IRAM_ATTR onTimer() {
+  portENTER_CRITICAL_ISR(&timerMux);
+  interruptCounter++;
+	 GPIO.out_w1ts = ((uint32_t)1 << stp); //Trigger a step. DigitalWrite equivalent (faster) see : https://www.reddit.com/r/esp32/comments/f529hf/results_comparing_the_speeds_of_different_gpio/
+  portEXIT_CRITICAL_ISR(&timerMux);
 }
 
 //Resolution moteur
+
+//****Stepper driver Microstep Resolution************
+// MS1  MS2 Microstep Resolution
+// 0    0   Full Step (2 Phase)
+// 1    0   Half Step
+// 0    1   Quarter Step
+// 1    1   Eigth Step
 void ResolutionMoteur(int Resolution)
 {
   if (Resolution = 8) {
@@ -357,7 +384,7 @@ void AngleBackward(int Pas2)
 //Default angle mode function
 void TournerAngle(int Pas)
 {
-  ResolutionMoteur(StepperAngleDiv);
+  ResolutionMoteur(MicroStepping);
   int x;
   
   for(x= 0; x<Pas; x++)  //Loop the forward stepping enough times for motion to be visible
@@ -375,8 +402,8 @@ void TournerAngle(int Pas)
 void resetEDPins()
 {
   digitalWrite(stp, LOW);
-  digitalWrite(dir, LOW);
-  digitalWrite(MS1, LOW);
-  digitalWrite(MS2, LOW);
-  digitalWrite(EN, HIGH);
+  // digitalWrite(dir, LOW);
+  // digitalWrite(MS1, LOW);
+  // digitalWrite(MS2, LOW);
+  // digitalWrite(EN, HIGH);
 }
