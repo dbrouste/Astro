@@ -92,7 +92,7 @@ void setup() {
   pinMode(EN, OUTPUT);
   resetEDPins(); //Set step, direction, microstep and enable pins to default states
   Serial.begin(115200); //Open Serial connection for debugging
-  SerialBT.begin("ESP32"); //Bluetooth device name
+  SerialBT.begin("ESP32test"); //Bluetooth device name
   Serial.println("The device started, now you can pair it with bluetooth!");
   Serial.println("Open remote control app on your camera!");
   delay(10000);
