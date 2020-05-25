@@ -1,7 +1,7 @@
 //Board DOIT ESP32 DEVKIT v1
 
 #include <WiFi.h>
-#include "BluetoothSerial.h"
+#include "BluetoothSerial.h" //https://github.com/espressif/arduino-esp32/blob/master/libraries/BluetoothSerial/src/BluetoothSerial.h
 
 #if !defined(CONFIG_BT_ENABLED) || !defined(CONFIG_BLUEDROID_ENABLED)
 #error Bluetooth is not enabled! Please run `make menuconfig` to and enable it
@@ -20,6 +20,9 @@ BluetoothSerial SerialBT;
 // Stepper function
 String user_input;
 int current_menu;
+bool FirstExec = 1;
+bool CameraAvailable = 0;
+bool CameraRunning = 0;
 
 float StepperMinDegree = 1.8; // pas mimimum du moteur en degree
 int MicroStepping = 4; //1 2 4 ou 8
@@ -30,7 +33,8 @@ int DayInSec = 86160;
 int CoeffCorrecteur = 1;
 int Vitesse = 1;
 int VitesseRapide = 100;
-int TempsPose = 30; //(s)
+int TempsPose = 5; //(s)
+
 
 // Interrupt for motor step
 // https://techtutorialsx.com/2017/10/07/esp32-arduino-timer-interrupts/
@@ -95,10 +99,10 @@ void setup() {
   SerialBT.begin("ESP32 Astro"); //Bluetooth device name
   Serial.println("The device started, now you can pair it with bluetooth!");
   Serial.println("Open remote control app on your camera!");
-  delay(10000);
+  //delay(10000);
   current_menu = 1;
   //CameraConnection();
-  menu_start();
+  //menu_start();
   
 }
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -117,18 +121,27 @@ void loop() {
   resetEDPins();
   
   if (interruptCounterPhoto > 0) {
- 
     portENTER_CRITICAL(&timerMux);
-    interruptCounter--;
+    interruptCounterPhoto--;
     portEXIT_CRITICAL(&timerMux);
- 
+    Serial.println(interruptCounterPhoto);
     StopDeclenchementPhoto();
+  }
+
+  if (CameraRunning and CameraAvailable) {
+    DeclenchementPhoto();
   }
 }
 
 void menu()
 {
+    if (FirstExec and SerialBT.hasClient()) {
+    menu_start();
+    FirstExec = 0;
+    }
+    
   while(SerialBT.available()){
+
     user_input = SerialBT.readString(); //Read user input and trigger appropriate function
     switch (current_menu) {
       case 1: 
@@ -150,7 +163,7 @@ void menu()
             Recule(VitesseRapide);
             break;
           case 6:
-            DeclenchementPhoto();
+            CameraRunning = 1;
             break;
           case 7:
             CameraConnection();
@@ -178,7 +191,7 @@ void menu()
             break;
           case 3:
             SerialBT.print("Temps de pose actuel : ");SerialBT.println(TempsPose);
-            SerialBT.println("Entrer le temps de pose");
+            SerialBT.println("Entrer le temps de pose (s)");
             current_menu = 5;
             break;
           case 9:
@@ -189,6 +202,24 @@ void menu()
             Error();
             break;
         }
+        break;
+      case 3:
+        //Step menu
+        Vitesse = user_input.toInt();
+        SerialBT.print("La nouvelle valeur de vitesse est : ");SerialBT.print(Vitesse);
+        current_menu = 1;
+        break;
+      case 4:
+        //Step menu
+        VitesseRapide = user_input.toInt();
+        SerialBT.print("La nouvelle valeur de vitesse rapide est : ");SerialBT.print(VitesseRapide);
+        current_menu = 1;
+        break;
+      case 5:
+        //Step menu
+        TempsPose = user_input.toInt();
+        SerialBT.print("La nouvelle valeur de temps de pose est : ");SerialBT.print(TempsPose);SerialBT.println("s");
+        current_menu = 1;
         break;
     }
     switch (current_menu) {
@@ -294,23 +325,24 @@ void CameraConnection()
 }
 
 void httpPost(char* jString) {
-  SerialBT.print("connecting to ");
-  SerialBT.println(host);
+  //SerialBT.print("connecting to ");
+  //SerialBT.println(host);
+  CameraAvailable = 0;
   if (!client.connect(host, httpPort)) {
     SerialBT.println("connection failed");
     return;
   }
   else {
-    SerialBT.print("connected to ");
-    SerialBT.print(host);
-    SerialBT.print(":");
-    SerialBT.println(httpPort);
+//    SerialBT.print("connected to ");
+//    SerialBT.print(host);
+//    SerialBT.print(":");
+//    SerialBT.println(httpPort);
   }
   // We now create a URI for the request
   String url = "/sony/camera/";
  
-  SerialBT.print("Requesting URL: ");
-  SerialBT.println(url);
+//  SerialBT.print("Requesting URL: ");
+//  SerialBT.println(url);
  
   // This will send the request to the server
   client.print(String("POST " + url + " HTTP/1.1\r\n" + "Host: " + host + "\r\n"));
@@ -321,7 +353,7 @@ void httpPost(char* jString) {
   client.println();
   // Request body
   client.println(jString);
-  SerialBT.println("wait for data");
+//  SerialBT.println("wait for data");
   lastmillis = millis();
   while (!client.available() && millis() - lastmillis < 8000) {} // wait 8s max for answer
  
@@ -330,10 +362,11 @@ void httpPost(char* jString) {
     String line = client.readStringUntil('\r');
     SerialBT.print(line);
   }
-  SerialBT.println();
-  SerialBT.println("----closing connection----");
-  SerialBT.println();
-  client.stop();
+  CameraAvailable = 1;
+//  SerialBT.println();
+//  SerialBT.println("----closing connection----");
+//  SerialBT.println();
+//  client.stop();
 }
 
 void DeclenchementPhoto()
@@ -347,6 +380,7 @@ void DeclenchementPhoto()
 
 void StopDeclenchementPhoto()
 {
+  timerAlarmDisable(timerPhoto);
   httpPost(JSON_4);  //Stop bulb
 }
 
@@ -374,7 +408,7 @@ void StopMotor()
 {
   timerAlarmDisable(timer);
   timerAlarmDisable(timerPhoto);
-  StopDeclenchementPhoto();
+  CameraRunning = 0;
 }
 
 
