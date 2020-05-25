@@ -39,6 +39,7 @@ int TempsPose = 5; //(s)
 // Interrupt for motor step
 // https://techtutorialsx.com/2017/10/07/esp32-arduino-timer-interrupts/
 // https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/peripherals/timer.html
+// https://github.com/espressif/arduino-esp32/blob/master/cores/esp32/esp32-hal-timer.h
 volatile int interruptCounter;
 int totalInterruptCounter;
 hw_timer_t * timer = NULL;
