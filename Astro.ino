@@ -10,7 +10,7 @@
 BluetoothSerial SerialBT;
 
  //Declare pin functions on RedBoard
-#define stp 32
+#define stp LED_BUILTIN //32
 #define PinDirection 33
 #define MS1 26
 #define MS2 27
@@ -92,13 +92,14 @@ void setup() {
   pinMode(EN, OUTPUT);
   resetEDPins(); //Set step, direction, microstep and enable pins to default states
   Serial.begin(115200); //Open Serial connection for debugging
-  SerialBT.begin("ESP32test"); //Bluetooth device name
+  SerialBT.begin("ESP32 Astro"); //Bluetooth device name
   Serial.println("The device started, now you can pair it with bluetooth!");
   Serial.println("Open remote control app on your camera!");
   delay(10000);
   current_menu = 1;
-  CameraConnection();
+  //CameraConnection();
   menu_start();
+  
 }
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -111,6 +112,7 @@ void setup() {
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
  //Main loop menu
 void loop() {
+
   menu();
   resetEDPins();
   
@@ -151,6 +153,9 @@ void menu()
             DeclenchementPhoto();
             break;
           case 7:
+            CameraConnection();
+            break;
+          case 8:
             Configuration();
             break;
           default:
@@ -203,14 +208,16 @@ void menu()
 
 void menu_start()
 {
+
   SerialBT.println("Enter number for control option:");
   SerialBT.println("1. Avance");
   SerialBT.println("2. Recule");
   SerialBT.println("3. Stop");
   SerialBT.println("4. Avance rapide");
   SerialBT.println("5. Recule rapide");
-  SerialBT.println("6. Demarrage photo");  
-  SerialBT.println("7. Configuration");
+  SerialBT.println("6. Demarrage photo");
+  SerialBT.println("7. Camera connection");  
+  SerialBT.println("8. Configuration");
   SerialBT.println();
 }
 
