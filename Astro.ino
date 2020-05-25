@@ -21,7 +21,7 @@ BluetoothSerial SerialBT;
 String user_input;
 int current_menu;
 bool FirstExec = 1;
-bool CameraAvailable = 0;
+bool CameraAvailable = 1;
 bool CameraRunning = 0;
 
 float StepperMinDegree = 1.8; // pas mimimum du moteur en degree
@@ -78,7 +78,7 @@ unsigned long lastmillis;
 
 void IRAM_ATTR onTimer() {
   portENTER_CRITICAL_ISR(&timerMux);
-  interruptCounter++;
+  //interruptCounter++;
   GPIO.out_w1ts = ((uint32_t)1 << stp); //Trigger a step. DigitalWrite equivalent (faster) see : https://www.reddit.com/r/esp32/comments/f529hf/results_comparing_the_speeds_of_different_gpio/
   portEXIT_CRITICAL_ISR(&timerMux);
 }
@@ -110,7 +110,7 @@ void setup() {
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////                   Menu                                  ///////////////////////////////
+////////////////////////////////                   Main                                  ///////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -128,11 +128,24 @@ void loop() {
     Serial.println(interruptCounterPhoto);
     StopDeclenchementPhoto();
   }
-
+  Serial.print("CameraRunning");
+Serial.println(CameraRunning);
+Serial.print("CameraAvailable");
+Serial.println(CameraAvailable);
   if (CameraRunning and CameraAvailable) {
     DeclenchementPhoto();
   }
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////                   Menu                                  ///////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 void menu()
 {
@@ -272,32 +285,6 @@ void Configuration()
   current_menu = 2;
 }
 
-int CalculIntervalleMoteur(void)
-{
-  int Intervalle = StepperMinDegree*DayInSec*Vitesse*1000*1000/(MicroStepping*MotorGearRatio*WormGearRatio*360); //intervalle en us
-  return Intervalle;
-}
-
-
-void Avance(int vitesse)
-{
-  SerialBT.println("On avance");
-  digitalWrite(EN, LOW); //Pull enable pin low to allow motor control
-  int Direction = 1; //Avance
-  int Intervalle = CalculIntervalleMoteur();
-  ControleMoteur(Intervalle,Direction);
-}
-
-void Recule(int distance)
-{
-  SerialBT.println("On recule");
-  digitalWrite(EN, LOW); //Pull enable pin low to allow motor control
-  int Direction = 0; //Reule
-  int Intervalle = CalculIntervalleMoteur();
-  ControleMoteur(Intervalle,Direction);
-}
-
-
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -328,7 +315,7 @@ void CameraConnection()
 void httpPost(char* jString) {
   //SerialBT.print("connecting to ");
   //SerialBT.println(host);
-  CameraAvailable = 0;
+  
   if (!client.connect(host, httpPort)) {
     SerialBT.println("connection failed");
     return;
@@ -363,7 +350,7 @@ void httpPost(char* jString) {
     String line = client.readStringUntil('\r');
     SerialBT.print(line);
   }
-  CameraAvailable = 1;
+
 //  SerialBT.println();
 //  SerialBT.println("----closing connection----");
 //  SerialBT.println();
@@ -377,12 +364,16 @@ void DeclenchementPhoto()
   timerAlarmWrite(timerPhoto, TempsPose*10000, true); //Def de la valeur du compteur
   timerAlarmEnable(timerPhoto); //Activation timer
   httpPost(JSON_3);  //actTakePicture
+  CameraAvailable = 0;
+  Serial.println("On demarre bulb");
 }
 
 void StopDeclenchementPhoto()
 {
   timerAlarmDisable(timerPhoto);
   httpPost(JSON_4);  //Stop bulb
+  CameraAvailable = 1;
+  Serial.println("On stoppe bulb");
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -394,6 +385,31 @@ void StopDeclenchementPhoto()
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+int CalculIntervalleMoteur(void)
+{
+  int Intervalle = StepperMinDegree*DayInSec*Vitesse*1000*1000/(MicroStepping*MotorGearRatio*WormGearRatio*360); //intervalle en us
+  return Intervalle;
+}
+
+
+void Avance(int vitesse)
+{
+  SerialBT.println("On avance");
+  digitalWrite(EN, LOW); //Pull enable pin low to allow motor control
+  int Direction = 1; //Avance
+  int Intervalle = CalculIntervalleMoteur();
+  ControleMoteur(Intervalle,Direction);
+}
+
+void Recule(int distance)
+{
+  SerialBT.println("On recule");
+  digitalWrite(EN, LOW); //Pull enable pin low to allow motor control
+  int Direction = 0; //Reule
+  int Intervalle = CalculIntervalleMoteur();
+  ControleMoteur(Intervalle,Direction);
+}
 
 //Controle moteur
 void ControleMoteur(int Intervalle,int Direction)
