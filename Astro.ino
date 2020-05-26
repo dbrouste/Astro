@@ -46,8 +46,8 @@ int TempsPose = 5; //(s)
 // https://github.com/espressif/arduino-esp32/blob/master/cores/esp32/esp32-hal-timer.h
 //volatile int interruptCounter;
 //int totalInterruptCounter;
-hw_timer_t * timer = NULL;
-portMUX_TYPE timerMux = portMUX_INITIALIZER_UNLOCKED;
+//hw_timer_t * timerMotor = NULL;
+//portMUX_TYPE timerMux = portMUX_INITIALIZER_UNLOCKED;
 
 // Interrupt for taking pictures
 volatile int interruptCounterPhoto;
@@ -115,12 +115,13 @@ void setup() {
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void IRAM_ATTR onTimer() {
-  portENTER_CRITICAL_ISR(&timerMux);
-  //interruptCounter++;
-  GPIO.out_w1ts = ((uint32_t)1 << stp); //Trigger a step. DigitalWrite equivalent (faster) see : https://www.reddit.com/r/esp32/comments/f529hf/results_comparing_the_speeds_of_different_gpio/
-  portEXIT_CRITICAL_ISR(&timerMux);
-}
+//void IRAM_ATTR onTimer() {
+//  portENTER_CRITICAL_ISR(&timerMux);
+//  //interruptCounter++;
+//  GPIO.out_w1ts = ((uint32_t)1 << stp); //Trigger a step. DigitalWrite equivalent (faster) see : https://www.reddit.com/r/esp32/comments/f529hf/results_comparing_the_speeds_of_different_gpio/
+//  GPIO.out_w1ts = ((uint32_t)0 >> stp);
+//  portEXIT_CRITICAL_ISR(&timerMux);
+//}
 
 void IRAM_ATTR onTimerPhoto() {
   portENTER_CRITICAL_ISR(&timerMuxPhoto);
@@ -141,18 +142,13 @@ void IRAM_ATTR onTimerPhoto() {
 void loop() {
 
   menu();
-  resetEDPins();
   
   if (interruptCounterPhoto > 0) {
-    portENTER_CRITICAL(&timerMux);
+    portENTER_CRITICAL(&timerMuxPhoto);
     interruptCounterPhoto--;
-    portEXIT_CRITICAL(&timerMux);
+    portEXIT_CRITICAL(&timerMuxPhoto);
     StopDeclenchementPhoto();
   }
-  Serial.print("CameraRunning");
-Serial.println(CameraRunning);
-Serial.print("CameraAvailable");
-Serial.println(CameraAvailable);
   if (CameraRunning and CameraAvailable) {
     DeclenchementPhoto();
   }
@@ -386,13 +382,11 @@ void DeclenchementPhoto()
   timerPhoto = timerBegin(2, 80000, true); //Definition adresse timer
   timerAttachInterrupt(timerPhoto, &onTimerPhoto, true); //Def de l'action à executer
   timerAlarmWrite(timerPhoto, TempsPose*10000, true); //Def de la valeur du compteur
+  yield();
   timerAlarmEnable(timerPhoto); //Activation timer
   httpPost(JSON_3);  //actTakePicture
   CameraAvailable = 0;
  CompteurPhoto++;
- Serial.print("CameraAvailable");
-Serial.println(CameraAvailable);
-  Serial.println("On demarre bulb");
 }
 
 void StopDeclenchementPhoto()
@@ -402,9 +396,21 @@ void StopDeclenchementPhoto()
   CameraAvailable = 1;
  SerialBT.print("Photo");
 SerialBT.println(CompteurPhoto);
- Serial.print("CameraAvailable");
-Serial.println(CameraAvailable);
-  Serial.println("On stoppe bulb");
+}
+
+void StopPrisePhoto()
+{
+  if (timerPhoto != NULL) {  //https://github.com/espressif/arduino-esp32/issues/1313
+    timerAlarmDisable(timerPhoto);
+    timerDetachInterrupt(timerPhoto);
+    timerEnd(timerPhoto);
+    timerPhoto = NULL;
+  }
+  CompteurPhoto = 0;
+ if (CameraRunning and !CameraAvailable) {
+   StopDeclenchementPhoto();
+ }
+  CameraRunning = 0;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -417,10 +423,11 @@ Serial.println(CameraAvailable);
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-int CalculIntervalleMoteur(void)
+int CalculFrequencyMoteur(int vit)
 {
-  int Intervalle = StepperMinDegree*DayInSec*Vitesse*1000*1000/(MicroStepping*MotorGearRatio*WormGearRatio*360); //intervalle en us
-  return Intervalle;
+  int Frequency = (MicroStepping*MotorGearRatio*WormGearRatio*360)/(StepperMinDegree*DayInSec*vit); //Fréquence
+  Serial.println("Frequency");
+
 }
 
 
@@ -429,40 +436,44 @@ void Avance(int vitesse)
   SerialBT.println("On avance");
   digitalWrite(EN, LOW); //Pull enable pin low to allow motor control
   int Direction = 1; //Avance
-  int Intervalle = CalculIntervalleMoteur();
-  ControleMoteur(Intervalle,Direction);
+  int Frequency = CalculFrequencyMoteur(vitesse);
+  ControleMoteur(Frequency,Direction);
 }
 
-void Recule(int distance)
+void Recule(int vitesse)
 {
   SerialBT.println("On recule");
   digitalWrite(EN, LOW); //Pull enable pin low to allow motor control
   int Direction = 0; //Reule
-  int Intervalle = CalculIntervalleMoteur();
-  ControleMoteur(Intervalle,Direction);
+  int Frequency = CalculFrequencyMoteur(vitesse);
+  ControleMoteur(Frequency,Direction);
 }
 
 //Controle moteur
-void ControleMoteur(int Intervalle,int Direction)
+void ControleMoteur(int Frequency,int Direction)
 {
   digitalWrite(PinDirection, Direction); //Choix direction
-  timer = timerBegin(1, 80, true); //Definition adresse timer
-  timerAttachInterrupt(timer, &onTimer, true); //Def de l'action à executer
-  timerAlarmWrite(timer, Intervalle, true); //Def de la valeur du compteur
-  timerAlarmEnable(timer); //Activation timer
+  ledcSetup(0, Frequency, 8);
+  ledcAttachPin(stp, 0);
+  ledcWrite(0, 5); //255/2
+//  timerMotor = timerBegin(3, 80, true); //Definition adresse timer
+//  timerAttachInterrupt(timerMotor, &onTimer, true); //Def de l'action à executer
+//  timerAlarmWrite(timerMotor, Frequency, true); //Def de la valeur du compteur
+//  timerAlarmEnable(timerMotor); //Activation timer
 }
 
 void StopMotor()
 {
-  timerAlarmDisable(timer);
-  timerAlarmDisable(timerPhoto);
-  CompteurPhoto = 0;
- if (CameraRunning and !CameraAvailable) {
-   StopDeclenchementPhoto()
- }
-  CameraRunning = 0;
- Serial.print("CameraRunning");
-Serial.println(CameraRunning);
+  
+  ledcWrite(0, 0);
+  StopPrisePhoto();
+  
+//    if (timerMotor != NULL) {  //https://github.com/espressif/arduino-esp32/issues/1313
+//    timerAlarmDisable(timerMotor);
+//    timerDetachInterrupt(timerMotor);
+//    timerEnd(timerMotor);
+//    timerMotor = NULL;
+//  }
 }
 
 
@@ -518,8 +529,8 @@ void ResolutionMoteur(int Resolution)
 void resetEDPins()
 {
   digitalWrite(stp, LOW);
-  // digitalWrite(dir, LOW);
-  // digitalWrite(MS1, LOW);
-  // digitalWrite(MS2, LOW);
-  // digitalWrite(EN, HIGH);
+  digitalWrite(PinDirection, LOW);
+  digitalWrite(MS1, LOW);
+  digitalWrite(MS2, LOW);
+  digitalWrite(EN, HIGH);
 }
