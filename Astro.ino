@@ -103,6 +103,10 @@ void setup() {
   Serial.println("The device started, now you can pair it with bluetooth!");
   Serial.println("Open remote control app on your camera!");
   current_menu = 1;
+ 
+  timerPhoto = timerBegin(2, 80000, true); //Definition adresse timer interrupt
+  timerAttachInterrupt(timerPhoto, &onTimerPhoto, true); //Def de l'action à executer 
+ 
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -379,10 +383,7 @@ void httpPost(char* jString) {
 
 void DeclenchementPhoto()
 {
-  timerPhoto = timerBegin(2, 80000, true); //Definition adresse timer
-  timerAttachInterrupt(timerPhoto, &onTimerPhoto, true); //Def de l'action à executer
   timerAlarmWrite(timerPhoto, TempsPose*10000, true); //Def de la valeur du compteur
-  yield();
   timerAlarmEnable(timerPhoto); //Activation timer
   httpPost(JSON_3);  //actTakePicture
   CameraAvailable = 0;
@@ -394,23 +395,24 @@ void StopDeclenchementPhoto()
   timerAlarmDisable(timerPhoto);
   httpPost(JSON_4);  //Stop bulb
   CameraAvailable = 1;
- SerialBT.print("Photo");
-SerialBT.println(CompteurPhoto);
+ SerialBT.print("Photo n°");
+ SerialBT.println(CompteurPhoto);
 }
 
 void StopPrisePhoto()
 {
   if (timerPhoto != NULL) {  //https://github.com/espressif/arduino-esp32/issues/1313
     timerAlarmDisable(timerPhoto);
-    timerDetachInterrupt(timerPhoto);
-    timerEnd(timerPhoto);
-    timerPhoto = NULL;
+//    timerDetachInterrupt(timerPhoto);
+//    timerEnd(timerPhoto);
+//    timerPhoto = NULL;
   }
-  CompteurPhoto = 0;
+ 
  if (CameraRunning and !CameraAvailable) {
    StopDeclenchementPhoto();
  }
   CameraRunning = 0;
+  CompteurPhoto = 0;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -427,7 +429,6 @@ int CalculFrequencyMoteur(int vit)
 {
   int Frequency = (MicroStepping*MotorGearRatio*WormGearRatio*360)/(StepperMinDegree*DayInSec*vit); //Fréquence
   Serial.println("Frequency");
-
 }
 
 
