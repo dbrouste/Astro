@@ -1,7 +1,9 @@
+
 //Board DOIT ESP32 DEVKIT v1
 
 #include <WiFi.h>
 #include "BluetoothSerial.h" //https://github.com/espressif/arduino-esp32/blob/master/libraries/BluetoothSerial/src/BluetoothSerial.h
+
 
 #if !defined(CONFIG_BT_ENABLED) || !defined(CONFIG_BLUEDROID_ENABLED)
 #error Bluetooth is not enabled! Please run `make menuconfig` to and enable it
@@ -55,6 +57,9 @@ int totalInterruptCounterPhoto;
 hw_timer_t * timerPhoto = NULL;
 portMUX_TYPE timerMuxPhoto = portMUX_INITIALIZER_UNLOCKED;
 
+const int PWMChannel = 0;
+const int PWMResolution = 8;
+
 
 ////////////////////////////////                   Sony variable                            ///////////////////////////////////
 // https://stackoverflow.com/questions/49084483/what-apis-do-new-sony-cameras-support-i-e-a9-ilce-9-a7r2-ilce-7rm2-a7m3
@@ -78,36 +83,6 @@ char JSON_5[] = "{\"version\":\"1.0\",\"id\":1,\"method\":\"actTakePicture\",\"p
 //char JSON_3[] = "{\"version\":\"1.0\",\"id\":1,\"method\":\"startLiveview\",\"params\":[]}";
 //char JSON_4[] = "{\"version\":\"1.0\",\"id\":1,\"method\":\"stopLiveview\",\"params\":[]}";
 WiFiClient client;
-
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////                   Setup                             ///////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-void setup() {
-  pinMode(stp, OUTPUT);
-  pinMode(PinDirection, OUTPUT);
-  pinMode(MS1, OUTPUT);
-  pinMode(MS2, OUTPUT);
-  pinMode(EN, OUTPUT);
-  resetEDPins(); //Set step, direction, microstep and enable pins to default states
-  Serial.begin(115200); //Open Serial connection for debugging
-  SerialBT.begin("ESP32 Astro"); //Bluetooth device name
-  Serial.println("The device started, now you can pair it with bluetooth!");
-  Serial.println("Open remote control app on your camera!");
-  current_menu = 1;
- 
-  timerPhoto = timerBegin(2, 80000, true); //Definition adresse timer interrupt
-  timerAttachInterrupt(timerPhoto, &onTimerPhoto, true); //Def de l'action à executer 
- 
-}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -137,6 +112,37 @@ void IRAM_ATTR onTimerPhoto() {
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////                   Setup                             ///////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+void setup() {
+  pinMode(stp, OUTPUT);
+  pinMode(PinDirection, OUTPUT);
+  pinMode(MS1, OUTPUT);
+  pinMode(MS2, OUTPUT);
+  pinMode(EN, OUTPUT);
+  resetEDPins(); //Set step, direction, microstep and enable pins to default states
+  Serial.begin(115200); //Open Serial connection for debugging
+  SerialBT.begin("ESP32 Astro"); //Bluetooth device name  https://github.com/espressif/arduino-esp32/blob/master/libraries/BluetoothSerial/src/BluetoothSerial.h
+  Serial.println("The device started, now you can pair it with bluetooth!");
+  Serial.println("Open remote control app on your camera!");
+  current_menu = 1;
+ 
+  timerPhoto = timerBegin(2, 80000, true); //Definition adresse timer interrupt  https://github.com/espressif/arduino-esp32/blob/master/cores/esp32/esp32-hal-timer.h
+  timerAttachInterrupt(timerPhoto, &onTimerPhoto, true); //Def de l'action à executer 
+  ledcAttachPin(stp, PWMChannel); //https://github.com/espressif/arduino-esp32/blob/master/cores/esp32/esp32-hal-ledc.h
+  ledcSetup(PWMChannel, 44, PWMResolution);
+}
+
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////                   Main                                  ///////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -153,9 +159,12 @@ void loop() {
     portEXIT_CRITICAL(&timerMuxPhoto);
     StopDeclenchementPhoto();
   }
+  
   if (CameraRunning and CameraAvailable) {
     DeclenchementPhoto();
   }
+
+  
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -322,7 +331,9 @@ void Configuration()
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 void CameraConnection()
 {
-  WiFi.begin(ssid, password);
+  if (WiFi.status() != WL_CONNECTED) {  //https://www.arduino.cc/en/Reference/WiFi
+    WiFi.begin(ssid, password);
+  }
   while (WiFi.status() != WL_CONNECTED) {   // wait for WiFi connection
     delay(500);
     SerialBT.print(".");
@@ -387,12 +398,14 @@ void DeclenchementPhoto()
   timerAlarmEnable(timerPhoto); //Activation timer
   httpPost(JSON_3);  //actTakePicture
   CameraAvailable = 0;
- CompteurPhoto++;
+  CompteurPhoto++;
 }
 
 void StopDeclenchementPhoto()
 {
-  timerAlarmDisable(timerPhoto);
+  if (timerPhoto != NULL) {  //https://github.com/espressif/arduino-esp32/issues/1313
+    timerAlarmDisable(timerPhoto);
+  }
   httpPost(JSON_4);  //Stop bulb
   CameraAvailable = 1;
  SerialBT.print("Photo n°");
@@ -401,12 +414,12 @@ void StopDeclenchementPhoto()
 
 void StopPrisePhoto()
 {
-  if (timerPhoto != NULL) {  //https://github.com/espressif/arduino-esp32/issues/1313
-    timerAlarmDisable(timerPhoto);
-//    timerDetachInterrupt(timerPhoto);
-//    timerEnd(timerPhoto);
-//    timerPhoto = NULL;
-  }
+//  if (timerPhoto != NULL) {  //https://github.com/espressif/arduino-esp32/issues/1313
+//    timerAlarmDisable(timerPhoto);
+////    timerDetachInterrupt(timerPhoto);
+////    timerEnd(timerPhoto);
+////    timerPhoto = NULL;
+//  }
  
  if (CameraRunning and !CameraAvailable) {
    StopDeclenchementPhoto();
@@ -428,7 +441,10 @@ void StopPrisePhoto()
 int CalculFrequencyMoteur(int vit)
 {
   int Frequency = (MicroStepping*MotorGearRatio*WormGearRatio*360)/(StepperMinDegree*DayInSec*vit); //Fréquence
-  Serial.println("Frequency");
+  //ledc_set_freq(LEDC_HS_MODE,PWMChannel,Frequency);
+  ledcWriteTone(PWMChannel,Frequency);
+  Serial.print("Frequency ");
+  Serial.println(Frequency);
 }
 
 
@@ -454,9 +470,8 @@ void Recule(int vitesse)
 void ControleMoteur(int Frequency,int Direction)
 {
   digitalWrite(PinDirection, Direction); //Choix direction
-  ledcSetup(0, Frequency, 8);
-  ledcAttachPin(stp, 0);
-  ledcWrite(0, 5); //255/2
+  //ledcSetup(PWMChannel, Frequency, PWMResolution);
+  ledcWrite(PWMChannel, 127); //255/2
 //  timerMotor = timerBegin(3, 80, true); //Definition adresse timer
 //  timerAttachInterrupt(timerMotor, &onTimer, true); //Def de l'action à executer
 //  timerAlarmWrite(timerMotor, Frequency, true); //Def de la valeur du compteur
@@ -465,8 +480,8 @@ void ControleMoteur(int Frequency,int Direction)
 
 void StopMotor()
 {
-  
-  ledcWrite(0, 0);
+
+  ledcWrite(PWMChannel, 0);
   StopPrisePhoto();
   
 //    if (timerMotor != NULL) {  //https://github.com/espressif/arduino-esp32/issues/1313
