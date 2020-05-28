@@ -1,4 +1,3 @@
-
 //Board DOIT ESP32 DEVKIT v1
 
 #include <WiFi.h>
@@ -439,7 +438,7 @@ void StopPrisePhoto()
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-double CalculFrequencyMoteur(int vit)
+void CalculFrequencyMoteur(int vit)
 {
   double Frequency = (MicroStepping*MotorGearRatio*WormGearRatio*360*CoeffCorrecteur)/(StepperMinDegree*DayInSec*vit); //Fréquence
   //ledc_set_freq(LEDC_HS_MODE,PWMChannel,Frequency);
@@ -454,6 +453,7 @@ void Avance(int vitesse)
   SerialBT.println("On avance");
   digitalWrite(EN, LOW); //Pull enable pin low to allow motor control
   int Direction = 1; //Avance
+  CalculFrequencyMoteur(vitesse);
   ControleMoteur(Direction);
 }
 
@@ -462,6 +462,7 @@ void Recule(int vitesse)
   SerialBT.println("On recule");
   digitalWrite(EN, LOW); //Pull enable pin low to allow motor control
   int Direction = 0; //Recule
+  CalculFrequencyMoteur(vitesse);
   ControleMoteur(Direction);
 }
 
