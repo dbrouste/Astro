@@ -3,7 +3,7 @@
 
 #include <WiFi.h>
 #include "BluetoothSerial.h" //https://github.com/espressif/arduino-esp32/blob/master/libraries/BluetoothSerial/src/BluetoothSerial.h
-
+//#include <EEPROM.h> // include library to read and write from flash memory. https://www.electronics-lab.com/project/using-esp32s-flash-memory-for-data-storage/
 
 #if !defined(CONFIG_BT_ENABLED) || !defined(CONFIG_BLUEDROID_ENABLED)
 #error Bluetooth is not enabled! Please run `make menuconfig` to and enable it
@@ -17,6 +17,8 @@ BluetoothSerial SerialBT;
 #define MS1 26
 #define MS2 27
 #define EN  25
+
+#define EEPROM_SIZE 1 // define the number of bytes you want to access
 
 ////////////////////////////////                   General variable                             ///////////////////////////////////
 // Stepper function
@@ -135,6 +137,8 @@ void setup() {
   timerAttachInterrupt(timerPhoto, &onTimerPhoto, true); //Def de l'action à executer 
   ledcAttachPin(stp, PWMChannel); //https://github.com/espressif/arduino-esp32/blob/master/cores/esp32/esp32-hal-ledc.h
   ledcSetup(PWMChannel, 44, PWMResolution);
+ 
+  //EEPROM.begin(EEPROM_SIZE);
 }
 
 
@@ -179,9 +183,13 @@ void loop() {
 
 void menu()
 {
-    if (FirstExec and SerialBT.hasClient()) {
-    menu_start();
-    FirstExec = 0;
+    if (FirstExec and SerialBT.hasClient()) { //Show menu on connection
+     menu_start();
+     FirstExec = 0;
+    }
+ 
+    if (!SerialBT.hasClient()) { //Show menu on reconnection
+     FirstExec = 1;
     }
     
   while(SerialBT.available()){
@@ -414,13 +422,6 @@ void StopDeclenchementPhoto()
 
 void StopPrisePhoto()
 {
-//  if (timerPhoto != NULL) {  //https://github.com/espressif/arduino-esp32/issues/1313
-//    timerAlarmDisable(timerPhoto);
-////    timerDetachInterrupt(timerPhoto);
-////    timerEnd(timerPhoto);
-////    timerPhoto = NULL;
-//  }
- 
  if (CameraRunning and !CameraAvailable) {
    StopDeclenchementPhoto();
  }
@@ -438,9 +439,9 @@ void StopPrisePhoto()
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-int CalculFrequencyMoteur(int vit)
+double CalculFrequencyMoteur(int vit)
 {
-  int Frequency = (MicroStepping*MotorGearRatio*WormGearRatio*360)/(StepperMinDegree*DayInSec*vit); //Fréquence
+  double Frequency = (MicroStepping*MotorGearRatio*WormGearRatio*360*CoeffCorrecteur)/(StepperMinDegree*DayInSec*vit); //Fréquence
   //ledc_set_freq(LEDC_HS_MODE,PWMChannel,Frequency);
   ledcWriteTone(PWMChannel,Frequency);
   Serial.print("Frequency ");
@@ -453,21 +454,19 @@ void Avance(int vitesse)
   SerialBT.println("On avance");
   digitalWrite(EN, LOW); //Pull enable pin low to allow motor control
   int Direction = 1; //Avance
-  int Frequency = CalculFrequencyMoteur(vitesse);
-  ControleMoteur(Frequency,Direction);
+  ControleMoteur(Direction);
 }
 
 void Recule(int vitesse)
 {
   SerialBT.println("On recule");
   digitalWrite(EN, LOW); //Pull enable pin low to allow motor control
-  int Direction = 0; //Reule
-  int Frequency = CalculFrequencyMoteur(vitesse);
-  ControleMoteur(Frequency,Direction);
+  int Direction = 0; //Recule
+  ControleMoteur(Direction);
 }
 
 //Controle moteur
-void ControleMoteur(int Frequency,int Direction)
+void ControleMoteur(int Direction)
 {
   digitalWrite(PinDirection, Direction); //Choix direction
   //ledcSetup(PWMChannel, Frequency, PWMResolution);
@@ -481,7 +480,7 @@ void ControleMoteur(int Frequency,int Direction)
 void StopMotor()
 {
 
-  ledcWrite(PWMChannel, 0);
+  ledcWrite(PWMChannel, 0); //Motor stop
   StopPrisePhoto();
   
 //    if (timerMotor != NULL) {  //https://github.com/espressif/arduino-esp32/issues/1313
@@ -519,10 +518,12 @@ void ResolutionMoteur(int Resolution)
   else if (Resolution = 4) {
     digitalWrite(MS1, LOW);
     digitalWrite(MS2, HIGH);
+    SerialBT.println("Resolution 4");
     }
   else if (Resolution = 2) {
     digitalWrite(MS1, HIGH);
     digitalWrite(MS2, LOW); 
+    SerialBT.println("Resolution 2");
     } 
   else if (Resolution = 1) {
     digitalWrite(MS1, LOW);
