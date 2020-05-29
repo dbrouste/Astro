@@ -11,7 +11,7 @@
 BluetoothSerial SerialBT;
 
  //Declare pin functions on RedBoard
-#define stp LED_BUILTIN //32
+#define stp 32 //LED_BUILTIN
 #define PinDirection 33
 #define MS1 26
 #define MS2 27
@@ -440,7 +440,7 @@ void StopPrisePhoto()
 
 void CalculFrequencyMoteur(int vit)
 {
-  double Frequency = (MicroStepping*MotorGearRatio*WormGearRatio*360*CoeffCorrecteur)/(StepperMinDegree*DayInSec*vit); //Fréquence
+  double Frequency = (MicroStepping*MotorGearRatio*WormGearRatio*360*CoeffCorrecteur*vit)/(StepperMinDegree*DayInSec); //Fréquence
   //ledc_set_freq(LEDC_HS_MODE,PWMChannel,Frequency);
   ledcWriteTone(PWMChannel,Frequency);
   Serial.print("Frequency ");
@@ -470,6 +470,7 @@ void Recule(int vitesse)
 void ControleMoteur(int Direction)
 {
   digitalWrite(PinDirection, Direction); //Choix direction
+  ResolutionMoteur(MicroStepping);
   //ledcSetup(PWMChannel, Frequency, PWMResolution);
   ledcWrite(PWMChannel, 127); //255/2
 //  timerMotor = timerBegin(3, 80, true); //Definition adresse timer
@@ -511,22 +512,22 @@ void StopMotor()
 // 1    1   Eigth Step
 void ResolutionMoteur(int Resolution)
 {
-  if (Resolution = 8) {
+  if (Resolution == 8) {
     digitalWrite(MS1, HIGH); //Pull MS1, and MS2 high to set logic to 1/8th microstep resolution
     digitalWrite(MS2, HIGH);
     SerialBT.println("Resolution 8");
     }
-  else if (Resolution = 4) {
+  else if (Resolution == 4) {
     digitalWrite(MS1, LOW);
     digitalWrite(MS2, HIGH);
     SerialBT.println("Resolution 4");
     }
-  else if (Resolution = 2) {
+  else if (Resolution == 2) {
     digitalWrite(MS1, HIGH);
     digitalWrite(MS2, LOW); 
     SerialBT.println("Resolution 2");
     } 
-  else if (Resolution = 1) {
+  else if (Resolution == 1) {
     digitalWrite(MS1, LOW);
     digitalWrite(MS2, LOW);
     SerialBT.println("Resolution 1");
