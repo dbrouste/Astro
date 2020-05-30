@@ -11,11 +11,12 @@
 BluetoothSerial SerialBT;
 
  //Declare pin functions on RedBoard
-#define stp 32 //LED_BUILTIN
-#define PinDirection 33
-#define MS1 26
-#define MS2 27
-#define EN  25
+#define PinDirection 32
+#define stp 33 //LED_BUILTIN
+#define MS3 25
+#define MS2 26
+#define MS1 27
+#define EN  14
 
 #define EEPROM_SIZE 1 // define the number of bytes you want to access
 
@@ -32,11 +33,11 @@ int CompteurPhoto = 0;
 
 ////////////////////////////////                   Physical variable                             ///////////////////////////////////
 float StepperMinDegree = 1.8; // pas mimimum du moteur en degree
-int MicroStepping = 4; //1 2 4 ou 8
+int MicroStepping = 8; //1 2 4 ou 8
 int Attente = 1000; // Attente avant photo (en ms)
-int MotorGearRatio = 475;
-int WormGearRatio = 10;
-int DayInSec = 86160;
+const int MotorGearRatio = 475;
+const int WormGearRatio = 10;
+const int DayInSec = 86160;
 int CoeffCorrecteur = 1;
 int Vitesse = 1;
 int VitesseRapide = 100;
@@ -512,24 +513,34 @@ void StopMotor()
 // 1    1   Eigth Step
 void ResolutionMoteur(int Resolution)
 {
-  if (Resolution == 8) {
+  if (Resolution == 16) {
     digitalWrite(MS1, HIGH); //Pull MS1, and MS2 high to set logic to 1/8th microstep resolution
     digitalWrite(MS2, HIGH);
+    digitalWrite(MS3, HIGH);
+    SerialBT.println("Resolution 16");
+    }
+  else if (Resolution == 8) {
+    digitalWrite(MS1, HIGH);
+    digitalWrite(MS2, HIGH);
+    digitalWrite(MS3, LOW);
     SerialBT.println("Resolution 8");
     }
   else if (Resolution == 4) {
     digitalWrite(MS1, LOW);
-    digitalWrite(MS2, HIGH);
+    digitalWrite(MS2, HIGH); 
+    digitalWrite(MS3, LOW);
     SerialBT.println("Resolution 4");
-    }
+    } 
   else if (Resolution == 2) {
     digitalWrite(MS1, HIGH);
-    digitalWrite(MS2, LOW); 
+    digitalWrite(MS2, LOW);
+    digitalWrite(MS3, LOW);
     SerialBT.println("Resolution 2");
-    } 
+    }
   else if (Resolution == 1) {
     digitalWrite(MS1, LOW);
     digitalWrite(MS2, LOW);
+    digitalWrite(MS3, LOW);
     SerialBT.println("Resolution 1");
     }
 }
